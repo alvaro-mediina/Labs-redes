@@ -7,6 +7,8 @@ def nonASCIIchar(url:str):
         print("Se encontró dominio en formato Unicode...")
     return affirmative
 
+
+
 def main():
     url = input("Introducir ->")
     affirmativeIDN = nonASCIIchar(url)

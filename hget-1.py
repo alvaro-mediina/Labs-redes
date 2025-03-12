@@ -21,6 +21,7 @@ import sys
 import socket
 import optparse
 import idna
+import re
 
 PREFIX = "http://"
 HTTP_PORT = 80   # El puerto por convencion para HTTP,
@@ -103,19 +104,22 @@ def connect_to_server(server_name):
     return s
     # NO MODIFICAR POR FUERA DE ESTA FUNCION
 
-
 def send_request(connection, url):
     """
-    Envia por 'connection' un pedido HTTP de la URL dada
+    Envia por 'connection' un pedido HTTP de la URL dada.
 
     Precondicion:
         connection es valido y esta conectado
         url.startswith(PREFIX)
     """
-    HTTP_REQUEST = b"GET %s HTTP/1.0\r\n\r\n"
+    server = parse_server(url)
+    path = url[len(PREFIX) + len(server):]  # Extraer la ruta después del dominio
+    if not path:
+        path = "/"  # Si no hay ruta, usar "/"
 
-    connection.send(HTTP_REQUEST % url.encode())
-
+    # Crear la solicitud HTTP con el encabezado Host
+    request = f"GET {path} HTTP/1.1\r\nHost: {server}\r\nConnection: close\r\n\r\n"
+    connection.send(request.encode())
 
 def read_line(connection):
     """
@@ -146,62 +150,69 @@ def read_line(connection):
 
 def check_http_response(header):
     """
-    Verifica que el encabezado de la respuesta este bien formado e indique
-    éxito. Un encabezado de respuesta HTTP tiene la forma
-
-    HTTP/<version> <codigo> <mensaje>
-
-    Donde version tipicamente es 1.0 o 1.1, el codigo para exito es 200,
-    y el mensaje es opcional y libre pero suele ser una descripcion del
-    codigo.
+    Verifica que el encabezado de la respuesta este bien formado y devuelve el código de estado.
 
     >>> check_http_response(b"HTTP/1.1 200 Ok")
-    True
+    (True, 200)
 
-    >>> check_http_response(b"HTTP/1.1 200")
-    True
-
-    >>> check_http_response(b"HTTP/1.1 301 Permanent Redirect")
-    False
+    >>> check_http_response(b"HTTP/1.1 301 Moved Permanently")
+    (True, 301)
 
     >>> check_http_response(b"Malformed")
-    False
+    (False, None)
     """
     header = header.decode()
     elements = header.split(' ', 3)
-    return (len(elements) >= 2 and elements[0].startswith("HTTP/")
-            and elements[1] == HTTP_OK)
-
+    if len(elements) >= 2 and elements[0].startswith("HTTP/"):
+        return (True, int(elements[1]))
+    return (False, None)
 
 def get_response(connection, filename):
     """
-    Recibe de `connection' una respuesta HTTP, y si es valida la descarga
-    en un archivo llamdo `filename'.
-
-    Devuelve True en caso de éxito, False en caso contrario
+    Recibe de `connection` una respuesta HTTP y la descarga en un archivo llamado `filename`.
+    Si la respuesta es una redirección (código 301), sigue la redirección automáticamente.
     """
     BUFFER_SIZE = 4096
 
     # Verificar estado
     header = read_line(connection)
-    if not check_http_response(header):
+    is_ok, status_code = check_http_response(header)
+    if not is_ok:
         sys.stdout.write("Encabezado HTTP malformado: '%s'\n" % header.strip())
         return False
-    else:
-        # Saltear el resto del encabezado
+
+    # Leer el resto del encabezado
+    headers = {}
+    line = read_line(connection)
+    while line != b'\r\n' and line != b'':
+        if b":" in line:
+            key, value = line.split(b":", 1)
+            headers[key.strip().lower()] = value.strip()
         line = read_line(connection)
-        while line != b'\r\n' and line != b'':
-            line = read_line(connection)
 
-        # Descargar los datos al archivo
-        output = open(filename, "wb")
+    # Manejar redirección (código 301)
+    if status_code == 301:
+        if b"location" in headers:
+            new_location = headers[b"location"].decode()
+            # Si la nueva ubicación es una ruta relativa, convertirla en una URL completa
+            if not new_location.startswith("http"):
+                server = parse_server(url)
+                new_location = f"http://{server}{new_location}"
+            sys.stderr.write(f"Redirigiendo a {new_location}\n")
+            download(new_location, filename)
+            return True
+        else:
+            sys.stderr.write("Redirección sin cabecera 'Location'\n")
+            return False
+
+    # Si no es una redirección, descargar el contenido
+    output = open(filename, "wb")
+    data = connection.recv(BUFFER_SIZE)
+    while data != b'':
+        output.write(data)
         data = connection.recv(BUFFER_SIZE)
-        while data != b'':
-            output.write(data)
-            data = connection.recv(BUFFER_SIZE)
-        output.close()
-        return True
-
+    output.close()
+    return True
 
 def download(url, filename):
     """
@@ -210,7 +221,7 @@ def download(url, filename):
     """
     # Obtener server
     print(f"La url ingresada es: {url}")
-        #Verificar si a URL tiene caracteres Unicode
+    # Verificar si a URL tiene caracteres Unicode
     if nonASCIIchar(url):
         url = convertASCIIchar(url)
 
@@ -241,7 +252,26 @@ def download(url, filename):
         # Descomentar la siguiente línea para debugging:
         # raise
         sys.exit(1)
+    finally:
+        connection.close()  # Cerrar la conexión
 
+def is_valid_url(url):
+    """
+    Valida que la URL esté bien formada.
+    """
+    # Expresión regular para validar URLs con o sin caracteres Unicode
+    url_pattern = re.compile(
+        r"^https?://"  # http:// o https://
+        r"(?:(?:[A-Z0-9-]+\.)+[A-Z]{2,}|"  # Dominio sin Unicode
+        r"xn--[A-Z0-9-]+|"  # Dominio con Punycode
+        r"[\w\u0080-\uffff-]+(?:\.[\w\u0080-\uffff-]+)*)"  # Dominio con Unicode
+        r"(?::\d+)?"  # Puerto opcional
+        r"(?:/[^\s?#]*)?"  # Ruta opcional
+        r"(?:\?[^\s#]*)?"  # Query string opcional
+        r"(?:#[^\s]*)?$",  # Fragmento opcional
+        re.IGNORECASE,
+    )
+    return bool(url_pattern.match(url))
 
 #Funciones Extra para Punto estrella
 def nonASCIIchar(url:str):
@@ -286,3 +316,4 @@ def main():
 if __name__ == "__main__":
     main()
     sys.exit(0)
+
