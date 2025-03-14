@@ -99,7 +99,7 @@ def connect_to_server(server_name):
     # COMPLETAR ABAJO DE ESTA LINEA
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Aqui deben conectarse al puerto correcto del servidor
-    s.connect((server_name, 80))
+    s.connect((server_name, HTTP_PORT))
     return s
     # NO MODIFICAR POR FUERA DE ESTA FUNCION
 
