@@ -1,7 +1,9 @@
 # 🧪 Laboratorio 0 - Aplicación Cliente 👤
 
 # 🤓 Punto Estrella ✨
+
 Cuáles son los mecanismos que permiten funcionar a nombres de dominios como:
+
 > - http://中文.tw/
 > - https://💩.la
 
@@ -15,10 +17,29 @@ Este tipo de caracteres forman parte de un conjunto de caracteres llamado `Unico
 
 _Logo de Unicode_
 
-> [!NOTE] 
+> [!NOTE]
+>
 > ## Punycode
+>
 > A dicho sistema de codificación lo proporciona la librería de Python `idna`, la cual
 > se encarga de convertir nombres de dominio Unicode a nombres de dominio ASCII compatibles con el sistema de nombres de dominio (DNS).
+
+## Código
+
+Se agregaron algunas línes de código al archivo `hget.py` y se creó un nuevo archivo llamado `hget-unicode.py` para poder realizar la conversión de nombres de dominio Unicode a ASCII.
+
+Se tuvieron en cuenta las siguientes consideraciones:
+
+- Se utilizó la librería `idna` para realizar la conversión de nombres de dominio Unicode a ASCII.
+- Se utilizó la función `idna.encode()` para realizar la conversión.
+- Se definió una función llamada `nonASCIIchar()`, la cual verifica si la URL tiene caracteres Unicode (fuera del rango ASCII).
+- Se definió una función llamada `convertASCIIchar()`, la cual convierte una URL con dominio Unicode a su equivalente Punycode.
+- En la función `main()`, se verifica si la URL tiene caracteres Unicode y si es así, se convierte a su equivalente Punycode.
+
+  ```python
+      if nonASCIIchar(url):
+          url = convertASCIIchar(url)
+  ```
 
 ## Ejemplos de uso
 
