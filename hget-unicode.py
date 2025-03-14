@@ -1,4 +1,4 @@
-#https://git.cs.famaf.unc.edu.ar/redes/lab-kickstarters/lab0-kickstarter.git#!/usr/bin/env python
+#!/usr/bin/env python
 # encoding: utf-8
 """
 hget: un cliente HTTP simple
@@ -16,22 +16,17 @@ Revision 2011: Eduardo Sanchez
 Original 2009-2010: Natalia Bidart, Daniel Moisset
 
 """
+
 import sys
 import socket
 import optparse
 import idna
-import ssl  
 
-
-
-
-PREFIX = "http://"  # Cambiado a https
-HTTP_PORT = 443   # Cambiado a puerto HTTPS estándar
-HTTP_OK = "200"  # El código esperado para respuesta exitosa.
-#PREFIX = "http://"
-#HTTP_PORT = 80   # El puerto por convencion para HTTP,
+PREFIX = "http://"
+HTTP_PORT = 80   # El puerto por convencion para HTTP,
 # según http://tools.ietf.org/html/rfc1700
 HTTP_OK = "200"  # El codigo esperado para respuesta exitosa.
+HTTP_REDIRECTS = ["301", "302"]
 
 
 def parse_server(url):
@@ -67,9 +62,9 @@ def parse_server(url):
     path_elements = path.split('/')
     result = path_elements[0]
 
+    assert result != None
     assert url.startswith(PREFIX + result)
     assert '/' not in result
-
     return result
 
 
@@ -96,25 +91,17 @@ def connect_to_server(server_name):
 
     # Buscar direccion ip
     # COMPLETAR ABAJO DE ESTA LINEA
+    ip_address = socket.gethostbyname(server_name)
     # Aqui deberian obtener la direccion ip del servidor y asignarla
     # a ip_address
-    #server_name = idna.encode(server_name)
-    ip_address = socket.gethostbyname(server_name)
     # DEJAR LA LINEA SIGUIENTE TAL COMO ESTA
     sys.stderr.write("Contactando al servidor en %s...\n" % ip_address)
     # Crear socket
     # COMPLETAR ABAJO DE ESTA LINEA
-    mi_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Aqui deben conectarse al puerto correcto del servidor
-    #mi_socket.connect((ip_address, HTTP_PORT))
-    if PREFIX == "https://":
-        ssl_socket = ssl.wrap_socket(mi_socket, ssl_version=ssl.PROTOCOL_TLS)
-        ssl_socket.connect((ip_address, HTTP_PORT))
-        return ssl_socket
-    else:
-        mi_socket.connect((ip_address, HTTP_PORT))
-        return mi_socket
-
+    s.connect((server_name, HTTP_PORT))
+    return s
     # NO MODIFICAR POR FUERA DE ESTA FUNCION
 
 
@@ -189,66 +176,121 @@ def check_http_response(header):
 
 def get_response(connection, filename):
     """
-    Recibe de `connection' una respuesta HTTP, y si es valida la descarga
-    en un archivo llamdo `filename'.
+    Recibe de `connection` una respuesta HTTP, y si es válida la descarga
+    en un archivo llamado `filename`.
 
-    Devuelve True en caso de éxito, False en caso contrario
+    Devuelve True en caso de éxito, False en caso contrario.
+    Si la respuesta es una redirección 301 o 302, devuelve la nueva URL.
     """
     BUFFER_SIZE = 4096
 
     # Verificar estado
     header = read_line(connection)
     if not check_http_response(header):
-        sys.stdout.write("Encabezado HTTP malformado: '%s'\n" % header.strip())
+        header_str = header.decode().strip()
+        sys.stdout.write(f"Encabezado HTTP malformado: '{header_str}'\n")
+
+        # Manejo de redirección
+        if header_str.startswith("HTTP/1.1 301") or header_str.startswith("HTTP/1.1 302"):
+            sys.stdout.write("Redirección detectada...\n")
+
+            # Leer los encabezados para encontrar Location
+            new_url = None
+            while True:
+                line = read_line(connection).decode().strip()
+                if line.lower().startswith("location:"):
+                    new_url = line.partition(":")[2].strip()
+                    break
+                if line == "":  # Fin de los headers
+                    break
+
+            if new_url:
+                sys.stdout.write(f"Redirigiendo a: {new_url}\n")
+                # Verificar si la URL redirigida es HTTPS
+                if new_url.startswith("https://"):
+                    sys.stdout.write("Redirección a HTTPS detectada. El programa terminará aquí.\n")
+                    return False  # Terminar el proceso sin error
+
+                else:
+                    return new_url  # Continuar con HTTP si no es HTTPS
+
         return False
     else:
-        # Saltear el resto del encabezado
-        line = read_line(connection)
-        while line != b'\r\n' and line != b'':
-            line = read_line(connection)
+        # Saltar el resto del encabezado
+        while read_line(connection) not in [b'\r\n', b'']:
+            pass
 
         # Descargar los datos al archivo
-        output = open(filename, "wb")
-        data = connection.recv(BUFFER_SIZE)
-        while data != b'':
-            output.write(data)
+        with open(filename, "wb") as output:
             data = connection.recv(BUFFER_SIZE)
-        output.close()
+            while data:
+                output.write(data)
+                data = connection.recv(BUFFER_SIZE)
+
         return True
 
 
 def download(url, filename):
-    """
-    Descarga por http datos desde `url` y los guarda en un nuevo archivo
-    llamado `filename`
-    """
-    # Obtener server
     server = parse_server(url)
-    sys.stderr.write("Contactando servidor '%s'...\n" % server)
-
+    sys.stderr.write(f"Contactando servidor '{server}'...\n")
+    
     try:
         connection = connect_to_server(server)
     except socket.gaierror:
-        sys.stderr.write("No se encontro la direccion '%s'\n" % server)
+        sys.stderr.write(f"No se encontró la dirección '{server}'\n")
         sys.exit(1)
     except socket.error:
-        sys.stderr.write("No se pudo conectar al servidor HTTP en '%s:%d'\n"
-                         % (server, HTTP_PORT))
+        sys.stderr.write(f"No se pudo conectar al servidor HTTP en '{server}:{HTTP_PORT}'\n")
         sys.exit(1)
 
-    # Enviar pedido, recibir respuesta
     try:
         sys.stderr.write("Enviando pedido...\n")
         send_request(connection, url)
         sys.stderr.write("Esperando respuesta...\n")
         result = get_response(connection, filename)
+        
+        if isinstance(result, str):  # Si es una URL, manejar la redirección
+            sys.stderr.write(f"Redirigiendo a: {result}\n")
+            connection.close()
+            return download(result, filename)  # Llamada recursiva
+
         if not result:
             sys.stderr.write("No se pudieron descargar los datos\n")
     except Exception as e:
-        sys.stderr.write("Error al comunicarse con el servidor\n")
-        # Descomentar la siguiente línea para debugging:
-        # raise
+        sys.stderr.write(f"Error al comunicarse con el servidor: {e}\n")
         sys.exit(1)
+
+
+#Funciones Extra para Punto estrella
+def nonASCIIchar(url:str):
+    """Verifica si la URL tiene caracteres Unicode (fuera del rango ASCII)."""
+    affirmative = any(ord(c) > 127 for c in url)
+    if affirmative:
+        print("URL con caracteres Unicode detectados...")
+    return affirmative
+
+# def convertASCIIchar(unicode_domain:str):
+#     """Convierte un dominio Unicode a su equivalente Punycode."""   
+#     assert unicode_domain.startswith(PREFIX)
+#     unicode_domain = unicode_domain[7:]
+#     domain_parts = unicode_domain.split('/')[0]
+#     punycode_domain = PREFIX+idna.encode(domain_parts).decode()+"/"
+#     print(f"Dominio convertido a -> {punycode_domain}")
+#     return punycode_domain
+
+def convertASCIIchar(unicode_url: str):
+    """Convierte una URL con dominio Unicode a su equivalente Punycode."""
+    assert unicode_url.startswith(PREFIX)
+    url_without_prefix = unicode_url[len(PREFIX):]  # Quita "http://"
+    domain = url_without_prefix.split('/')[0]  # Extrae el dominio
+    path = url_without_prefix[len(domain):]  # Extrae la ruta (si existe)
+
+    punycode_domain = idna.encode(domain).decode()  # Convierte dominio a Punycode
+    converted_url = PREFIX + punycode_domain + path  # Reconstruye la URL completa
+
+    print(f"Dominio convertido a -> {converted_url}")
+    return converted_url
+
 
 
 def main():
@@ -269,6 +311,10 @@ def main():
         sys.stderr.write("La direccion '%s' no comienza con '%s'\n" % (url,
                                                                        PREFIX))
         sys.exit(1)
+
+
+    if nonASCIIchar(url):
+        url = convertASCIIchar(url) 
 
     download(url, options.output)
 
