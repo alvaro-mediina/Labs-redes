@@ -1,13 +1,19 @@
 # 🧪 Laboratorio 0 - Aplicación Cliente 👤
 
+# 📝 Tabla de Contenido
+
+1. [🤓 Punto Estrella ✨](#🤓-punto-estrella-✨)
+2. [🐍 Código](#🐍-código)
+3. [🫡 Conclusiones](#🫡-conclusiones)
+4. [🔗 Dependencias](#🔗-dependencias)
+5. [🏃 Ejecución](#🏃-ejecución)
+
 # 🤓 Punto Estrella ✨
 
 Cuáles son los mecanismos que permiten funcionar a nombres de dominios como:
 
 > - http://中文.tw/
 > - https://💩.la
-
-🤔
 
 Primero y principal debemos saber que los caracteres chinos y emojis no son válidos para ser utilizados en un nombre de dominio, porque los nombres de dominio solo pueden contener caracteres ASCII (análogamente se aplica para todo tipo de caracter que se utilice que sea no ASCII). Por lo tanto, para que estos nombres de dominio funcionen, se debe realizar un proceso de conversión de los caracteres no válidos a caracteres válidos, o también llamado `encoding`.
 
@@ -57,7 +63,7 @@ Además desde hace tiempo, la mayoría de los navegadores web soportan nombres d
 
 Me sirvió mucho este laboratorio para entender cómo funcionan los nombres de dominio Unicode y cómo se realiza la conversión de estos a ASCII, además de aprender cómo se realiza una petición HTTP a una página web utilizando Python y librerías como `socket` e `idna`.
 
-# Dependencias
+# 🔗 Dependencias
 
 1. Crear y activar entorno virtual
 
@@ -83,7 +89,7 @@ pip install idna
 deactivate
 ```
 
-# Ejecución
+# 🏃 Ejecución
 
 ```bash
 python hget-unicode.py http://ñandú.cl
