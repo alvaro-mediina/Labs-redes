@@ -47,15 +47,6 @@ Se tuvieron en cuenta las siguientes consideraciones:
 - Manejo de las redirecciones HTTP (códigos 301 y 302): Si la redirección es a https://, se interrumpe el proceso con un mensaje. Si la redirección es a http://, se realiza la petición a la nueva URL.
 - En la estructura de `download()`, se agregó código para manejar errores sin terminar el programa abruptamente.
 
-  ```python
-      while True:
-          if status_code == 301 or status_code == 302:
-              url = headers['Location']
-              status_code, headers, body = get(url)
-          else:
-              break
-  ```
-
 # 🫡 Conclusiones
 
 Este código a simple ejecución tiene la misma funcionalidad que `hget.py` teniendo en cuenta las consideraciones mencionadas anteriormente. Se puede observar que la conversión de nombres de dominio Unicode a ASCII es un proceso sencillo y rápido de realizar, gracias a la librería `idna` que nos proporciona Python.
@@ -74,13 +65,19 @@ Me sirvió mucho este laboratorio para entender cómo funcionan los nombres de d
 python3 -m venv venv
 ```
 
-2. Instalar dependencias. La única librería que se utilizó fuera del standard library de python es `idna`, para instalarla se puede hacer de la siguiente manera:
+2. Activar entorno virtual
+
+```bash
+source venv/bin/activate
+```
+
+3. Instalar dependencias. La única librería que se utilizó fuera del standard library de python es `idna`, para instalarla se puede hacer de la siguiente manera:
 
 ```bash
 pip install idna
 ```
 
-3. Salir del entorno virtual
+4. Salir del entorno virtual
 
 ```bash
 deactivate
