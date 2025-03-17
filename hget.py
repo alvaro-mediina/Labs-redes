@@ -60,7 +60,7 @@ def parse_server(url):
     path_elements = path.split('/')
     result = path_elements[0]
 
-    assert result != None
+    assert result is not None
     assert url.startswith(PREFIX + result)
     assert '/' not in result
     return result
