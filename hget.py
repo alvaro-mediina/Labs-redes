@@ -20,7 +20,6 @@ Original 2009-2010: Natalia Bidart, Daniel Moisset
 import sys
 import socket
 import optparse
-import idna
 
 PREFIX = "http://"
 HTTP_PORT = 80   # El puerto por convencion para HTTP,
@@ -209,12 +208,6 @@ def download(url, filename):
     llamado `filename`
     """
     # Obtener server
-    print(f"La url ingresada es: {url}")
-        #Verificar si a URL tiene caracteres Unicode
-    if nonASCIIchar(url):
-        url = convertASCIIchar(url)
-
-    print(f"La url de salida es: {url}")
     server = parse_server(url)
     sys.stderr.write("Contactando servidor '%s'...\n" % server)
 
@@ -242,23 +235,6 @@ def download(url, filename):
         # raise
         sys.exit(1)
 
-
-#Funciones Extra para Punto estrella
-def nonASCIIchar(url:str):
-    """Verifica si la URL tiene caracteres Unicode (fuera del rango ASCII)."""
-    affirmative = any(ord(c) > 127 for c in url)
-    if affirmative:
-        print("URL con caracteres Unicode detectados...")
-    return affirmative
-
-def convertASCIIchar(unicode_domain:str):
-    """Convierte un dominio Unicode a su equivalente Punycode."""   
-    assert unicode_domain.startswith(PREFIX)
-    unicode_domain = unicode_domain[7:]
-    domain_parts = unicode_domain.split('/')[0]
-    punycode_domain = PREFIX+idna.encode(domain_parts).decode()+"/"
-    print(f"Dominio convertido a -> {punycode_domain}")
-    return punycode_domain
 
 
 def main():
